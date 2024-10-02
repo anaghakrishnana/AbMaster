@@ -2,6 +2,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 import logic
+import sheetlink
 from tkinter import filedialog
 import pandas as pd
 from PIL import Image, ImageTk
@@ -31,7 +32,7 @@ class AntibodyScraperApp:
         AddAntibodyWindow(self.root)
 
     def open_create_panel_window(self):
-        CreatePanelWindow(self.root)
+        PanelCreatorApp(self.root)
 
     def open_modify_panel_window(self):
         ModifyPanelWindow(self.root)
@@ -43,8 +44,8 @@ class AntibodyScraperApp:
         UseAntibodyWindow(self.root)
 
     def open_log_issue_window(self):
-        LogIssueWindow(self.root)
-
+        #LogIssueWindow(self.root)
+        logic.determine_free_inventory()
     def check_low_volume_antibodies(self):
         """Check for antibodies with volume < 10μL and only 1 vial remaining."""
         low_volume_antibodies = logic.check_low_volume_antibodies()
@@ -67,7 +68,7 @@ class AddAntibodyWindow:
         ttk.Label(self.new_window, text="Company:").grid(row=0, column=0, padx=10, pady=10)
         self.company_var = tk.StringVar()
         self.company_combobox = ttk.Combobox(self.new_window, textvariable=self.company_var)
-        self.company_combobox['values'] = ("BD", "Biolegend", "Tonbo", "Other (manual entry)")
+        self.company_combobox['values'] = ("BD", "Biolegend","Thermofisher", "Tonbo", "Other (manual entry)")
         self.company_combobox.grid(row=0, column=1, padx=10, pady=10)
         
         # Catalog number input
@@ -132,9 +133,19 @@ class AddAntibodyWindow:
             prefilled_data.update(newdata)
             print(prefilled_data)
             ManualEntryWindow(self.new_window, prefilled_data)
+        elif company=="Thermofisher":
+            newdata=logic.Thermofisher_Scraper(catalog_number)
+            prefilled_data = {
+                "Supplier": company if company != "Other (manual entry)" else "",
+                "Catalog Number": catalog_number}
+            prefilled_data.update(newdata)
+            print(prefilled_data)
+            ManualEntryWindow(self.new_window, prefilled_data)
+            
         
         else:
             messagebox.showerror("Input Error", "Unknown company selected.")
+       # self.new_window.destroy()
 #%% Manual Entry
 class ManualEntryWindow:
     def __init__(self, root, prefilled_data):
@@ -167,15 +178,25 @@ class ManualEntryWindow:
     def submit_manual_entry(self):
         # Collect data from entry fields
         data = {label.strip(':'): entry.get() for label, entry in self.entries.items()}
-        
+        print(data)
         # Add the collected data to the DataFrame via logic function
-        next_antibody_number = logic.add_antibody_to_dataframe(data)
+        if not "" in data.values(): #make sure every thing is filled out
+            if not logic.check_existing_inventory(data): # check the worksheet for the preexisting column, if not found go ahead and export and give a little message
+                
+            
+                messagebox.showinfo("Info", f"Manual entry submitted successfully! This antibody's ID is ")
+               
+                self.root.destroy() #kills the root window "new window" along with the current one
+        else: 
+            messagebox.showerror("Input Error", "Missing Parameter")
+        
+      
         
         # Show a message box with the antibody ID
         #messagebox.showinfo("Info", f"Manual entry submitted successfully! This antibody's ID is {next_antibody_number}")
         
         # Close the manual entry window
-        self.manual_entry_window.destroy()
+        
 
 
 #%% Create panel window
@@ -192,7 +213,7 @@ class CreatePanelWindow:
         ttk.Label(self.frame, text="Your Name:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
         self.user_name_var = tk.StringVar()
         self.user_name_combobox = ttk.Combobox(self.frame, textvariable=self.user_name_var)
-        self.user_name_combobox['values'] = ("Anagha", "Tim", "Hannah")  # Replace with actual names
+        self.user_name_combobox['values'] = ("Anagha", "Tim", "Hannah")
         self.user_name_combobox.grid(row=0, column=1, padx=10, pady=10)
 
         # Panel name input
@@ -221,15 +242,40 @@ class CreatePanelWindow:
     def add_antibody_input(self):
         """Add a new row of antibody input fields."""
         row = len(self.antibody_entries)  # Determine the next row number
-        ttk.Label(self.antibody_inputs_frame, text="Antibody Number:").grid(row=row, column=0, padx=10, pady=5, sticky='w')
-        antibody_entry = ttk.Entry(self.antibody_inputs_frame)
-        antibody_entry.grid(row=row, column=1, padx=10, pady=5)
+        row_frame = ttk.Frame(self.antibody_inputs_frame)
+        row_frame.grid(row=row, column=0, columnspan=4, pady=5, sticky='w')
 
-        ttk.Label(self.antibody_inputs_frame, text="Dilution:").grid(row=row, column=2, padx=10, pady=5, sticky='w')
-        dilution_entry = ttk.Entry(self.antibody_inputs_frame)
-        dilution_entry.grid(row=row, column=3, padx=10, pady=5)
+        ttk.Label(row_frame, text="Antibody Number:").grid(row=0, column=0, padx=10, pady=5, sticky='w')
+        antibody_entry = ttk.Entry(row_frame)
+        antibody_entry.grid(row=0, column=1, padx=10, pady=5)
 
-        self.antibody_entries.append((antibody_entry, dilution_entry))
+        ttk.Label(row_frame, text="Dilution:").grid(row=0, column=2, padx=10, pady=5, sticky='w')
+        dilution_entry = ttk.Entry(row_frame)
+        dilution_entry.grid(row=0, column=3, padx=10, pady=5)
+
+        # Add an "X" button to remove the row
+        remove_button = ttk.Button(row_frame, text="X", command=lambda: self.remove_antibody_input(row_frame))
+        remove_button.grid(row=0, column=4, padx=5, pady=5)
+
+        self.antibody_entries.append((antibody_entry, dilution_entry, row_frame))
+
+  #  def remove_antibody_input(self, row_frame):
+        #"""Remove an antibody input row."""
+    
+        #row_frame.grid_forget()  # Hide the row
+      #  row_frame.destroy()  # Destroy the frame
+       # self.antibody_entries = [entry for entry in self.antibody_entries if entry[2] != row_frame]  # Remove from list
+    def remove_antibody_input(self, row_frame):
+        """Remove an antibody input row and re-index the remaining ones."""
+        row_frame.grid_forget()  # Hide the row
+        row_frame.destroy()  # Destroy the frame
+    
+        # Remove the entry from the list
+        self.antibody_entries = [entry for entry in self.antibody_entries if entry[2] != row_frame]
+    
+        # Re-index the remaining rows
+        for idx, (antibody_entry, dilution_entry, frame) in enumerate(self.antibody_entries):
+            frame.grid(row=idx, column=0, columnspan=4, pady=5, sticky='w')
 
     def create_panel(self):
         """Create a new panel with the provided antibody information."""
@@ -242,15 +288,14 @@ class CreatePanelWindow:
 
         panel_data = []
 
-        for antibody_entry, dilution_entry in self.antibody_entries:
+        for antibody_entry, dilution_entry, _ in self.antibody_entries:
             antibody_number = antibody_entry.get()
             dilution = dilution_entry.get()
-
+            print(antibody_entry.get())
             if antibody_number and dilution:
                 # Retrieve antibody details from the DataFrame
                 if int(antibody_number) in logic.antibody_df['Antibody Number'].values:
                     antibody_details = logic.antibody_df[logic.antibody_df['Antibody Number'] == int(antibody_number)]
-                    print(antibody_details)
                     antibody_specificity = antibody_details['Antibody Specificity'].values[0]
                     label = antibody_details['Label'].values[0]
 
@@ -274,8 +319,6 @@ class CreatePanelWindow:
 
         messagebox.showinfo("Success", f"Panel created and saved as {file_path}")
         self.new_window.destroy()
-
-
 #%% Modify a panel
 class ModifyPanelWindow:
     def __init__(self, root):
@@ -705,8 +748,226 @@ class WelcomeWindow(tk.Tk):
 
     def show_alerts(self):
         print("Alerts button clicked")
+#%% New Panel Creator ---- needs  modifier and  mouse vs human interim page
+class PanelCreatorApp:
+    def __init__(self, root):
+        self.new_window = tk.Toplevel(root)
+        self.new_window.title("Google Spreadsheet Treeview with Panel Creation")
+
+        # Upper frame for user input
+        self.upper_frame = ttk.Frame(self.new_window)
+        self.upper_frame.pack(padx=10, pady=10, fill="x")
+
+        # Dropdown for name selection
+        ttk.Label(self.upper_frame, text="Select Your Name:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.name_var = tk.StringVar()
+        self.name_combobox = ttk.Combobox(self.upper_frame, textvariable=self.name_var)
+        self.name_combobox['values'] = ("Anagha", "Tim", "Hannah")
+        self.name_combobox.grid(row=0, column=1, padx=5, pady=5)
+
+        # Field for panel name input
+        ttk.Label(self.upper_frame, text="Panel Name:").grid(row=0, column=2, padx=5, pady=5, sticky='w')
+        self.panel_name_entry = ttk.Entry(self.upper_frame)
+        self.panel_name_entry.grid(row=0, column=3, padx=5, pady=5)
+
+        # Field for total volume input
+        ttk.Label(self.upper_frame, text="Total Volume:").grid(row=0, column=4, padx=5, pady=5, sticky='w')
+        self.total_volume_entry = ttk.Entry(self.upper_frame)
+        self.total_volume_entry.grid(row=0, column=5, padx=5, pady=5)
+
+        # Load spreadsheet data
+        self.sheet_data = sheetlink.fetch_mouse_inventory()
+
+        # Mid section for treeviews and buttons
+        self.middle_frame = ttk.Frame(self.new_window)
+        self.middle_frame.pack(padx=10, pady=10, fill="both", expand=True)
+
+        # Create left treeview (with dilution column)
+        self.left_treeview = self.create_treeview(self.middle_frame, include_dilution=True)
+        self.left_treeview.grid(row=0, column=0, padx=5, pady=5)
+
+        # Create right treeview (without dilution column)
+        self.right_treeview = self.create_treeview(self.middle_frame, include_dilution=False)
+        self.right_treeview.grid(row=0, column=2, padx=5, pady=5)
+
+        # Add buttons between treeviews
+        self.button_frame = ttk.Frame(self.middle_frame)
+        self.button_frame.grid(row=0, column=1, padx=5, pady=5, sticky='n')
+
+        self.add_button = ttk.Button(self.button_frame, text="<", command=self.move_to_left)
+        self.add_button.pack(pady=5)
+
+        self.remove_button = ttk.Button(self.button_frame, text=">", command=self.move_to_right)
+        self.remove_button.pack(pady=5)
+
+        # Create Panel button at the bottom
+        self.create_panel_button = ttk.Button(self.new_window, text="Create Panel", command=self.create_panel)
+        self.create_panel_button.pack(pady=10)
+
+        # Load right treeview with spreadsheet data
+        self.load_right_treeview()
+
+        # Bind left treeview click for editing
+        self.left_treeview.bind("<Double-1>", self.on_double_click_left)
+
+    def create_treeview(self, parent, include_dilution=True):
+        """Helper function to create a treeview. Optionally includes a 'Dilution' column."""
+        if include_dilution:
+            columns = ("Inventory Number", "Antibody Specificity","Label" ,"Peak Channel (CyTEK)", "Dilution")
+        else:
+            columns = ("Inventory Number", "Antibody Specificity","Label", "Peak Channel (CyTEK)")
+
+        tree = ttk.Treeview(parent, columns=columns, show='headings')
+
+        # Define column headings
+        tree.heading("Inventory Number", text="Inventory Number")
+        tree.heading("Antibody Specificity", text="Antibody Specificity")
+        tree.heading("Label", text="Label")
+        tree.heading("Peak Channel (CyTEK)", text="Peak Channel")
+
+        if include_dilution:
+            tree.heading("Dilution", text="Dilution")
+
+        # Set column widths
+        tree.column("Inventory Number", width=120)
+        tree.column("Antibody Specificity", width=150)
+        tree.column("Label", width=150)
+        tree.column("Peak Channel (CyTEK)", width=100)
+
+        if include_dilution:
+            tree.column("Dilution", width=80)
+
+        return tree
+
+    def load_right_treeview(self):
+        """Load the right treeview with spreadsheet data (without dilution column) and filter non-numeric Inventory Numbers."""
+        for row in self.sheet_data[1:]:  # Skip the header row
+            inventory_number = row[0]
+            
+            # Filter out non-numeric inventory numbers
+            try:
+                int(inventory_number)  # Check if the value is numeric
+                antibody_specificity = row[1]
+                peak_channel = row[3]
+                label=row[2]
+                self.right_treeview.insert("", "end", values=(inventory_number, antibody_specificity, label ,peak_channel))
+            except ValueError:
+                # Skip non-numeric inventory numbers
+                continue
+    
+        # Sort the right treeview after loading
+        self.sort_treeview(self.right_treeview)
+    
+    def move_to_left(self):
+        """Move selected row from right treeview to left treeview and add editable dilution, filtering non-numeric values."""
+        selected_item = self.right_treeview.selection()
+        if selected_item:
+            item_values = self.right_treeview.item(selected_item, "values")
+            
+            # Filter out non-numeric inventory numbers
+            try:
+                int(item_values[0])  # Check if the first value is numeric
+                self.left_treeview.insert("", "end", values=item_values + ("",))  # Move values to left treeview with empty dilution
+    
+                # Remove from right treeview
+                self.right_treeview.delete(selected_item)
+    
+                # Sort the left treeview after moving
+                self.sort_treeview(self.left_treeview)
+            except ValueError:
+                # Skip if the value is non-numeric
+                pass
 
 
+    def move_to_right(self):
+        """Remove selected row from left treeview and return it to right treeview."""
+        selected_item = self.left_treeview.selection()
+        if selected_item:
+            item_values = self.left_treeview.item(selected_item, "values")
+            self.right_treeview.insert("", "end", values=item_values[:3])  # Return values (without dilution) to right treeview
+
+            # Remove from left treeview
+            self.left_treeview.delete(selected_item)
+            self.sort_treeview(self.right_treeview)
+
+    def sort_treeview(self, treeview):
+        """Sort the treeview by the first column (Inventory Number), handling mixed types."""
+        items = [(treeview.item(item)["values"], item) for item in treeview.get_children()]
+    
+        # Sort by the first column (Inventory Number)
+        def sort_key(value):
+            first_col_value = value[0][0]  # Extract the first column value (Inventory Number)
+    
+            # Try to convert to an integer for numeric sorting, otherwise keep as string
+            try:
+                return int(first_col_value)  # Sort numerically if possible
+            except ValueError:
+                return str(first_col_value)  # Otherwise, sort lexicographically
+    
+        # Sort the items using the sort_key
+        sorted_items = sorted(items, key=sort_key)
+    
+        # Rearrange treeview items in sorted order
+        for index, (_, item) in enumerate(sorted_items):
+            treeview.move(item, "", index)
+
+    def on_double_click_left(self, event):
+        """Handle double-clicking to edit the dilution field in the left treeview."""
+        region = self.left_treeview.identify_region(event.x, event.y)
+        if region == 'cell':  # Check if clicking on a cell
+            column = self.left_treeview.identify_column(event.x)
+            if column == '#4':  # Check if the Dilution column was clicked
+                row_id = self.left_treeview.identify_row(event.y)
+                if row_id:
+                    # Get the current value of the cell
+                    current_value = self.left_treeview.item(row_id, 'values')[3]
+                    # Create an entry widget to edit the value
+                    entry = ttk.Entry(self.left_treeview)
+                    entry.insert(0, current_value)
+                    entry.focus()
+
+                    # Position the entry widget on top of the clicked cell
+                    bbox = self.left_treeview.bbox(row_id, column)
+                    entry.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
+
+                    # Bind focus out or return key to update the cell value
+                    entry.bind("<FocusOut>", lambda e: self.update_dilution(row_id, entry))
+                    entry.bind("<Return>", lambda e: self.update_dilution(row_id, entry))
+
+    def update_dilution(self, row_id, entry):
+        """Update the dilution value in the treeview from the entry."""
+        new_value = entry.get()
+        # Update the dilution in the treeview
+        current_values = list(self.left_treeview.item(row_id, 'values'))
+        current_values[3] = new_value
+        self.left_treeview.item(row_id, values=current_values)
+        entry.destroy()  # Remove the entry widget after updating
+    def create_panel(self):
+        """Create a panel, export to Google Sheets, and add a new worksheet with treeview data and total volume."""
+    
+        # Get the name, panel name, and total volume from the input fields
+        user_name = self.name_var.get()
+        panel_name = self.panel_name_entry.get()
+        total_volume = self.total_volume_entry.get()
+    
+        # Combine the name and panel name for the new sheet
+        new_sheet_name = f"Panel:{user_name}_{panel_name}"
+    
+        # Collect data from the left treeview (antibody information)
+        panel_data = []
+        headers = ["Inventory Number", "Antibody Specificity", "Dilution"]
+    
+        for row_id in self.left_treeview.get_children():
+            row = self.left_treeview.item(row_id, "values")
+            panel_data.append([row[0], row[1], row[3]])  # Only include Inventory Number, Antibody Specificity, and Dilution
+    
+        # Add Total Volume at the bottom right
+        panel_data.append(["", "", f"Total Volume: {total_volume}"])
+    
+        
+        # Add a new worksheet with the generated sheet name
+       #     sheetlink.export_panel(new_sheet_name,headers,panel_data): 
+    
 #%% Browse page
 
 

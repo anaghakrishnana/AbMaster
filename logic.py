@@ -1,3 +1,7 @@
+########################### the is  the logic sheet that handles anything that isn't a terminal or direct sheet writing
+##########################    includes webscraping and peak channel  detemrination
+##########################
+#########################
 import pandas as pd
 from tkinter import messagebox
 import numpy as np
@@ -8,6 +12,8 @@ from tkinter import simpledialog, messagebox
 import nest_asyncio
 import pdfplumber
 import re
+import time
+import sheetlink
 EXCEL_FILE = "antibody_data.xlsx"
 SHEET_NAME = "Antibodies"
 
@@ -287,18 +293,7 @@ def BD_scraper(catalog_number):
                    
                 else:
                     print("Label keyword not found")
-# =============================================================================
-#                ######## #Declare peak channel
-#                 start_keyword = "Reactivity:"
-#                 start_index = text.find(start_keyword)
-#                 if start_index != -1:
-#                     start_index += len(start_keyword)  # Move to the end of the keyword
-#                     end_index = text.find('\n', start_index)  # Find the next newline character
-#                     reactivity_value = text[start_index:end_index].strip()  # Strip removes extra spaces
-#                     print(reactivity_value)
-#                 else:
-#                     print("Reactivity keyword not found")
-# =============================================================================
+
                 #### Declare a clone
                 start_keyword = "Clone:"
                 start_index = text.find(start_keyword)
@@ -406,18 +401,7 @@ def TonboCytek_Scraper(catalog_number):
                
             else:
                 print("Label keyword not found")
-# =============================================================================
-#                ######## #Declare peak channel
-#                 start_keyword = "Reactivity:"
-#                 start_index = text.find(start_keyword)
-#                 if start_index != -1:
-#                     start_index += len(start_keyword)  # Move to the end of the keyword
-#                     end_index = text.find('\n', start_index)  # Find the next newline character
-#                     reactivity_value = text[start_index:end_index].strip()  # Strip removes extra spaces
-#                     print(reactivity_value)
-#                 else:
-#                     print("Reactivity keyword not found")
-# =============================================================================
+
             #### Declare a clone
             start_keyword = "Clone\n"
             start_index = text.find(start_keyword)
@@ -522,18 +506,7 @@ def Biolegend_Scraper(catalog_number):
                    antibodydict["Peak Channel (CyTEK)"]=peak_channel(antibodydict["Label"])
             else:
                 print("Label keyword not found")
-# =============================================================================
-#                ######## #Declare peak channel
-#                 start_keyword = "Reactivity:"
-#                 start_index = text.find(start_keyword)
-#                 if start_index != -1:
-#                     start_index += len(start_keyword)  # Move to the end of the keyword
-#                     end_index = text.find('\n', start_index)  # Find the next newline character
-#                     reactivity_value = text[start_index:end_index].strip()  # Strip removes extra spaces
-#                     print(reactivity_value)
-#                 else:
-#                     print("Reactivity keyword not found")
-# =============================================================================
+
             #### Declare a clone
             start_keyword = "Clone\n"
             start_index = text.find(start_keyword)
@@ -566,7 +539,7 @@ def Biolegend_Scraper(catalog_number):
                 None
             # Display product details
             #print(f"Product details for '{filtered_titles[selected_index]}':\n{product_details}")
-            print(antibodydict)
+          #  print(antibodydict)
             return antibodydict#[[selected_index],[product_details]]
             
         except Exception as e:
@@ -575,16 +548,126 @@ def Biolegend_Scraper(catalog_number):
     
     # Run the asyncio event loop
     return asyncio.run(main())
-def peak_channel(inputchannel):
+def Thermofisher_Scraper(catalog_number):
+    # Asynchronous function to scrape the search results
+    nest_asyncio.apply()
+    def show_popup(message):
+        root = tk.Tk()
+        root.withdraw()  # Hide the main Tkinter window
+        messagebox.showerror("Error", message)
+        root.destroy()
+    # Asynchronous function to scrape the product details
+    async def scrape_product_details(link):
+        session = AsyncHTMLSession()
+        
+        # Fetch the product details page
+        response = await session.get(link)
+        await response.html.arender(timeout=20)
+        time.sleep(2)
+        final_url = response.url
+        print(f"Final URL: {final_url}")
+        # Find the product details from 'product-details-list__container'
+        name_details_element = response.html.find('h1.product-name', first=True)
+        product_details_element = response.html.find('.product-detail-section.tested-app-section.new-tbl-design.product-specific-section.table-spec', first=True)
+        
+        if product_details_element:
+            return "Title:"+name_details_element.text+'\n'+product_details_element.text
+        else:
+            return "Product details not found."
+    
+    # Main asynchronous function to handle the flow
+    async def main():
+        # Get search term from user input
+        search_term = catalog_number
+        search_url = f"https://www.thermofisher.com/antibody/product/{search_term}"
+        print(search_url)
+        try:
+            
+            product_details = await scrape_product_details(search_url)
+            
+            # Display product details
+           # print(f"Product details for '{search_term}':\n{product_details}")
+            text=product_details #add the page title to the data
+            print(text)
+            antibodydict={}
+            #####declare a Specificity 
+            start_keyword = "Title:" #using "title" instead of the  index  allows the string to be human readable 
+            start_index = text.find(start_keyword)
+            if start_index != -1:
+                start_index += len(start_keyword)  # Move to the end of the keyword
+                end_index = text.find(' '   , start_index)  # Find the next newline character
+                title=text[start_index:end_index].strip()  # Strip removes extra spaces
+                parts = title.rsplit(' ', 1) #get whatever is at the end
+                antibodydict["Antibody Specificity"]=parts[-1]
+            else:
+                print("Specificty  not found")
+              ######  ###Declare a label
+            start_keyword = "Conjugate\n" #comes from concatenated format table
+            start_index = text.find(start_keyword)
+            if start_index != -1:
+                start_index += len(start_keyword)  # Move to the end of the keyword
+                end_index = text.find('\n', start_index)  # Find the next newline character
+                antibodydict["Label"] = text[start_index:end_index].strip()  # Strip removes extra spaces
+                if antibodydict["Label"]:
+                   antibodydict["Peak Channel (CyTEK)"]=peak_channel(antibodydict["Label"])
+            else:
+                print("Label keyword not found")
+
+            #### Declare a clone
+            start_keyword = "Clone\n"
+            start_index = text.find(start_keyword)
+            if start_index != -1:
+                start_index += len(start_keyword)  # Move to the end of the keyword
+                end_index = text.find('\n', start_index)  # terminate this at the (see availible)
+                antibodydict["Clone"] = text[start_index:end_index].strip()  # Strip removes extra spaces
+                
+            else:
+                print("Reactivity keyword not found")
+            #### Declare a target
+            start_keyword = "Reactivity\n"
+            start_index = text.find(start_keyword)
+            if start_index != -1:
+                start_index += len(start_keyword)  # Move to the end of the keyword
+                end_index = text.find('\n', start_index)  # Find the next newline character
+                antibodydict["Target Species"]= text[start_index:end_index].strip()  # Strip removes extra spaces
+               
+            else:
+                print("Reactivity keyword not found")
+            #### Declare a host
+            start_keyword = "Isotype\n"
+            start_index = text.find(start_keyword)
+            if start_index != -1:
+                start_index += len(start_keyword)  # Move to the end of the keyword
+                end_index = text.find('\n', start_index)  # Find the next newline character
+                antibodydict["Host Species"]= text[start_index:end_index].strip()  # Strip removes extra spaces
+                
+            else:
+                None
+            # Display product details
+            #print(f"Product details for '{filtered_titles[selected_index]}':\n{product_details}")
+          #  print(antibodydict)
+            return antibodydict#[[selected_index],[product_details]]
+            
+        except Exception as e:
+            # If an error occurs, display a pop-up message
+            show_popup(f"An error occurred: {str(e)}")
+    
+    # Run the asyncio event loop
+    return asyncio.run(main())
+def peak_channel(inputchannel): #external peak channel determining because I may move it 
     phrases = ["Brilliant Violet", "Brilliant Blue", "Cyanine","Brilliant Ultra Violet","Alexa Fluor 700"]
 
     # Corresponding abbreviations
     abbreviations = ["BV", "BB", "Cy","BUV","AF700"]
-
+    inputchannel = inputchannel.replace("Â®", "")
     for phrase, abbreviation in zip(phrases, abbreviations):
             inputchannel = inputchannel.replace(phrase, abbreviation)
             inputchannel = inputchannel.replace("/", "-")
-    print(inputchannel+"input channel")
+            
+            print(inputchannel)
+            if "BUV" or "BV" in inputchannel:inputchannel = inputchannel.replace(" ", "")
+            inputchannel = inputchannel.replace("â„¢", "")
+    #print(inputchannel+"input channel")
     pdf_path = "/Users/westtn/Downloads/Cytek Aurora 5L Fluorescent Guide.pdf"  # Replace with your PDF file path
     with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
@@ -596,4 +679,28 @@ def peak_channel(inputchannel):
                         if row[3] and re.search(inputchannel, row[3], re.IGNORECASE) or row [4] and re.search(inputchannel, row[4], re.IGNORECASE) :
                             # Return the text from the 2nd column (index 1) of the same row
                             return row[1]  # Extracting text from 2nd column (index 1)
-
+def determine_free_inventory():
+    data=sheetlink.fetch_mouse_inventory()
+    print(data[1])
+def check_existing_inventory(dictionary): #check the existing inventory for duplicates
+# Function to display Yes/No dialog
+    data=sheetlink.fetch_mouse_inventory() #fetech all the data as a list of lists 
+    
+    def show_dialog(list_content):
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        result = messagebox.askyesno("Alert", f"Suspected Duplicate found: {list_content}\nContinue?")
+        root.destroy()  # Destroy the Tk window
+        if result:
+            return True
+        else:
+            messagebox.showerror("Error", "Action Canceled")
+            return False
+    
+    for lst in data:
+        
+            if (dictionary["Label"] and dictionary["Antibody Specificity"] and dictionary["Clone"] in lst) or dictionary["Catalog Number"] in lst:
+     
+                return show_dialog(lst)
+    
+    return False   # No match found
