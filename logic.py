@@ -1,5 +1,5 @@
-########################### the is  the logic sheet that handles anything that isn't a terminal or direct sheet writing
-##########################    includes webscraping and peak channel  detemrination
+########################### the is  the logic sheet that handles anything that isn't a terminal/bot command or direct sheet writing
+##########################    includes webscraping and peak channel  determination
 ##########################
 #########################
 import pandas as pd
@@ -16,7 +16,7 @@ import time
 import sheetlink
 EXCEL_FILE = "antibody_data.xlsx"
 SHEET_NAME = "Antibodies"
-
+#%% Anagha's work
 def load_antibody_data():
     """Load the antibody data from the Excel sheet into a DataFrame."""
     try:
@@ -40,7 +40,7 @@ def save_antibody_data(df):
 antibody_df = load_antibody_data()
 
 def find_next_antibody_number(df):
-    """Find the lowest available antibody number not already taken."""
+    """Find the lowest available antibody number not already taken.""" 
     if df.empty:
         return 1
     existing_numbers = set(df['Antibody Number'])
@@ -176,6 +176,8 @@ def update_last_user(antibody_number, last_user):
             print(f"Antibody number {antibody_number} not found.")
     else:
         print("Antibody DataFrame not available.")
+#%% WebScrapers
+#%%%>BD
 def BD_scraper(catalog_number):
     nest_asyncio.apply()
 
@@ -290,7 +292,8 @@ def BD_scraper(catalog_number):
                     start_index += len(start_keyword)  # Move to the end of the keyword
                     end_index = text.find('\n', start_index)  # Find the next newline character
                     antibodydict["Label"] = text[start_index:end_index].strip()  # Strip removes extra spaces
-                   
+                    if antibodydict["Label"]:
+                      antibodydict["Peak Channel (CyTEK)"]=peak_channel(antibodydict["Label"])
                 else:
                     print("Label keyword not found")
 
@@ -303,7 +306,7 @@ def BD_scraper(catalog_number):
                     antibodydict["Clone"] = text[start_index:end_index].strip()  # Strip removes extra spaces
                     
                 else:
-                    print("Reactivity keyword not found")
+                    print("Clone keyword not found")
                 #### Declare a target
                 start_keyword = "Reactivity:"
                 start_index = text.find(start_keyword)
@@ -336,7 +339,7 @@ def BD_scraper(catalog_number):
 
     # Run the asyncio event loop
     return asyncio.run(main())
-
+#%%%>Tonbo/Cytek
 def TonboCytek_Scraper(catalog_number):
     # Asynchronous function to scrape the search results
     nest_asyncio.apply()
@@ -398,6 +401,8 @@ def TonboCytek_Scraper(catalog_number):
                 start_index += len(start_keyword)  # Move to the end of the keyword
                 end_index = text.find('\n', start_index)  # Find the next newline character
                 antibodydict["Label"] = text[start_index:end_index].strip()  # Strip removes extra spaces
+                antibodydict["Label"] = antibodydict["Label"].replace("â„¢", "")
+                antibodydict["Label"] = antibodydict["Label"].replace("Â®", "")
                
             else:
                 print("Label keyword not found")
@@ -444,6 +449,7 @@ def TonboCytek_Scraper(catalog_number):
     
     # Run the asyncio event loop
     return asyncio.run(main())
+#%%%>Biolegend
 def Biolegend_Scraper(catalog_number):
     # Asynchronous function to scrape the search results
     nest_asyncio.apply()
@@ -455,16 +461,17 @@ def Biolegend_Scraper(catalog_number):
     # Asynchronous function to scrape the product details
     async def scrape_product_details(link):
         session = AsyncHTMLSession()
-        
+        print("initiating scrape")
         # Fetch the product details page
         response = await session.get(link)
+        print("initiating timeout")
         await response.html.arender(timeout=20)
     
         # Find the product details from 'product-details-list__container'
         name_details_element = response.html.find('h1.col-xs-12.noPadding', first=True)
         clone_details_element = response.html.find('.col-xs-8.noPaddingLeft', first=True)
         product_details_element = response.html.find('.col-xs-12.col-sm-9.pull-right.noPadding', first=True)
-        
+        print("testing elements")
         if product_details_element:
             return "Title:"+name_details_element.text+'\n'+clone_details_element.text+product_details_element.text
         else:
@@ -475,12 +482,13 @@ def Biolegend_Scraper(catalog_number):
         # Get search term from user input
         search_term = catalog_number
         search_url = f"https://www.biolegend.com/en-us/search-results?Keywords={search_term}"
+        print(search_url)
         try:
             
             product_details = await scrape_product_details(search_url)
             
             # Display product details
-           # print(f"Product details for '{search_term}':\n{product_details}")
+            print(f"Product details for '{search_term}':\n{product_details}")
             text=product_details #add the page title to the data
             print(text)
             antibodydict={}
@@ -501,7 +509,9 @@ def Biolegend_Scraper(catalog_number):
             if start_index != -1:
                 start_index += len(start_keyword)  # Move to the end of the keyword
                 end_index = text.find('anti', start_index)  # Find the next newline character
-                antibodydict["Label"] = text[start_index:end_index].strip()  # Strip removes extra spaces
+                antibodydict["Label"] = text[start_index:end_index]#.strip()  # Strip removes extra spaces
+                antibodydict["Label"] = antibodydict["Label"].replace("â„¢", "")
+                antibodydict["Label"] = antibodydict["Label"].replace("Â®", "")
                 if antibodydict["Label"]:
                    antibodydict["Peak Channel (CyTEK)"]=peak_channel(antibodydict["Label"])
             else:
@@ -548,7 +558,11 @@ def Biolegend_Scraper(catalog_number):
     
     # Run the asyncio event loop
     return asyncio.run(main())
+#%%%>Thermofisher/EBioscience
 def Thermofisher_Scraper(catalog_number):
+    
+
+    
     # Asynchronous function to scrape the search results
     nest_asyncio.apply()
     def show_popup(message):
@@ -588,7 +602,7 @@ def Thermofisher_Scraper(catalog_number):
             # Display product details
            # print(f"Product details for '{search_term}':\n{product_details}")
             text=product_details #add the page title to the data
-            print(text)
+           # print(text)
             antibodydict={}
             #####declare a Specificity 
             start_keyword = "Title:" #using "title" instead of the  index  allows the string to be human readable 
@@ -608,6 +622,8 @@ def Thermofisher_Scraper(catalog_number):
                 start_index += len(start_keyword)  # Move to the end of the keyword
                 end_index = text.find('\n', start_index)  # Find the next newline character
                 antibodydict["Label"] = text[start_index:end_index].strip()  # Strip removes extra spaces
+                antibodydict["Label"] = antibodydict["Label"].replace("â„¢", "")
+                antibodydict["Label"] = antibodydict["Label"].replace("Â®", "")
                 if antibodydict["Label"]:
                    antibodydict["Peak Channel (CyTEK)"]=peak_channel(antibodydict["Label"])
             else:
@@ -654,37 +670,90 @@ def Thermofisher_Scraper(catalog_number):
     
     # Run the asyncio event loop
     return asyncio.run(main())
+#%% Add Antibody functions
+#%%%>peak channel
 def peak_channel(inputchannel): #external peak channel determining because I may move it 
     phrases = ["Brilliant Violet", "Brilliant Blue", "Cyanine","Brilliant Ultra Violet","Alexa Fluor 700"]
-
+   # print("inputchannel1223"+inputchannel)
     # Corresponding abbreviations
     abbreviations = ["BV", "BB", "Cy","BUV","AF700"]
-    inputchannel = inputchannel.replace("Â®", "")
+    inputchannel = inputchannel.replace("Â®", " ")
     for phrase, abbreviation in zip(phrases, abbreviations):
             inputchannel = inputchannel.replace(phrase, abbreviation)
             inputchannel = inputchannel.replace("/", "-")
-            
-            print(inputchannel)
-            if "BUV" or "BV" in inputchannel:inputchannel = inputchannel.replace(" ", "")
-            inputchannel = inputchannel.replace("â„¢", "")
-    #print(inputchannel+"input channel")
-    pdf_path = "/Users/westtn/Downloads/Cytek Aurora 5L Fluorescent Guide.pdf"  # Replace with your PDF file path
-    with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                table = page.extract_table()  # Extract tables from each page
-                if table:
-                    # Loop through each row in the table
-                    for row in table:
-                        # Assuming search phrase is in the 4th or 5th column (index 3 or 4 in a zero-indexed list)
-                        if row[3] and re.search(inputchannel, row[3], re.IGNORECASE) or row [4] and re.search(inputchannel, row[4], re.IGNORECASE) :
-                            # Return the text from the 2nd column (index 1) of the same row
-                            return row[1]  # Extracting text from 2nd column (index 1)
-def determine_free_inventory():
-    data=sheetlink.fetch_mouse_inventory()
-    print(data[1])
-def check_existing_inventory(dictionary): #check the existing inventory for duplicates
+    
+   # print("inputchannel"+inputchannel)
+    if "BUV" in inputchannel or "BV" in inputchannel: inputchannel = inputchannel.replace(" ", "")
+    inputchannel = inputchannel.replace("â„¢", "")
+    inputchannel=inputchannel.rstrip()
+    #print("inputchannel"+inputchannel+"inputchannel")
+    column_values = sheetlink.fetch_dyes()
+    
+    # Loop through the values in column 1 to check for the inputchannel
+    for idx, cell_value in enumerate(column_values):
+        if re.search(inputchannel, cell_value, re.IGNORECASE):
+            # Return the value from column 2 in the same row
+            return sheetlink.return_channel(idx)  # idx + 1 because gspread uses 1-based indexing
+
+    return None  # Return None if inputchannel is not found
+    # pdf_path = "/Users/westtn/Downloads/Cytek Aurora 5L Fluorescent Guide.pdf"  # Replace with your PDF file path
+    # with pdfplumber.open(pdf_path) as pdf:
+    #         for page in pdf.pages:
+    #             table = page.extract_table()  # Extract tables from each page
+    #             if table:
+    #                 # Loop through each row in the table
+    #                 for row in table:
+    #                     # Assuming search phrase is in the 4th or 5th column (index 3 or 4 in a zero-indexed list)
+    #                     if row[3] and re.search(inputchannel, row[3], re.IGNORECASE) or row [4] and re.search(inputchannel, row[4], re.IGNORECASE) :
+    #                         # Return the text from the 2nd column (index 1) of the same row
+    #                         return row[1]  # Extracting text from 2nd column (index 1)
+
+
+        
+#%%%>High order inventory functions
+def determine_free_inventory(species):
+    if  "Mouse" in species:
+        numbers=sheetlink.fetch_numbers(species) #fetch the numbers
+        full_range = set(range(1, 600))
+        numbers = [int(num) for num in numbers if num.isdigit()]
+    
+        # Define the full range of numbers from 1 to 999
+        full_range = set(range(1, 1000))
+        
+        # Convert the given list to a set for faster lookup
+        numbers_set = set(numbers)
+        
+        # Find the missing numbers by subtracting the sets
+        missing_numbers = sorted(full_range - numbers_set)
+        
+        # Return the first missing number and the list of all missing numbers
+        first_missing = missing_numbers[0] if missing_numbers else None
+        return first_missing, missing_numbers
+    else:
+      #  print("human triggered")
+        numbers=sheetlink.fetch_numbers(species) #fetch the numbers
+        print("raw entries")
+        print(numbers)
+        full_range = set(range(1, 600))
+        numbers = [int(num.replace("H","")) for num in numbers if num.replace("H","").isdigit()]
+      #  print(numbers)
+        # Define the full range of numbers from 1 to 999
+        full_range = set(range(1, 1000))
+        
+        # Convert the given list to a set for faster lookup
+        numbers_set = set(numbers)
+        
+        # Find the missing numbers by subtracting the sets
+        missing_numbers = sorted(full_range - numbers_set)
+        
+        # Return the first missing number and the list of all missing numbers
+        first_missing = f"{missing_numbers[0]}H" if missing_numbers else None
+        missing_numbers=[f"{num}H" for num in missing_numbers]
+        return first_missing, missing_numbers
+    
+def check_existing_inventory(dictionary,species): #check the existing inventory for duplicates
 # Function to display Yes/No dialog
-    data=sheetlink.fetch_mouse_inventory() #fetech all the data as a list of lists 
+    data=sheetlink.fetch_inventory(species) #fetech all the data as a list of lists 
     
     def show_dialog(list_content):
         root = tk.Tk()
@@ -692,10 +761,10 @@ def check_existing_inventory(dictionary): #check the existing inventory for dupl
         result = messagebox.askyesno("Alert", f"Suspected Duplicate found: {list_content}\nContinue?")
         root.destroy()  # Destroy the Tk window
         if result:
-            return True
+            return False #false to duplicate found
         else:
             messagebox.showerror("Error", "Action Canceled")
-            return False
+            return True
     
     for lst in data:
         
@@ -704,3 +773,40 @@ def check_existing_inventory(dictionary): #check the existing inventory for dupl
                 return show_dialog(lst)
     
     return False   # No match found
+#%%%>Submit the Antibody
+def insert_and_update_row(channel,value, new_values,species):
+
+    print(f"searching around the index{value}")
+    if "Human"  in species: value=value.replace("H","")
+    # Get all values from column 1 as a list
+    column_values = sheetlink.fetch_numbers(species)
+    
+    # Find the index of the value - 1 in the list
+    try:
+        target_value = str(int(value) - 1)  # Subtract 1 from the given value and convert it to a string
+       # print (f"the received targeted value is {target_value}")
+        if "Mouse" in species: target_index = column_values.index(target_value) + 1  # gspread uses 1-based indexing
+        elif "Human" in species: target_index = column_values.index(str(target_value)+"H") + 1  # gspread uses 1-based indexing
+      #  print(f"the targeted indexis {target_index}")
+    except ValueError:
+        print(f"Value {target_value} not found in the list.")
+        return
+
+    # Insert a new row below the target index
+    sheetlink.insert_row(target_index,species) # Insert an empty row below the target index
+
+    # Update the new row with the five variables
+    sheetlink.add_antibody(target_index,new_values,species)
+    if "YG" in channel: color=[146,208,80] #load in RGB order
+    elif "UV" in channel:color=[217,217,217]
+    elif "R" in channel:color=[255,126,121]
+    elif "B"  in  channel:color=[0,176,240]
+    elif "V" in channel:color=[216,131,255]
+    else:color=[0,0,0]
+    target_index=target_index+1
+    print("color before is")
+    print(color)
+    sheetlink.polish_row(target_index,color,species)
+    print(f"Inserted new row below {target_value} and updated with values: {new_values}")
+
+ 
