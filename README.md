@@ -17,3 +17,4 @@ Password Protection and Administrator Roles <br />
 Inventory Panel Assignment  <br /> 
 
 
+WARNING: This version includes heavy AI code elements in recent commits. Revision pending
